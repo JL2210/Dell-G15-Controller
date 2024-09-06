@@ -54,7 +54,7 @@ class Command():
         for key, value in commands.items():
             self.acpi_cmd = value[0]
             laptop_model = self.acpi_call("get_laptop_model")
-            print(f"acpi call result: {laptop_model}")
+            #print(f"acpi call result: {laptop_model}")
             if (laptop_model == value[1]):
                 print("Detected Dell G15 {}. Laptop model id: {}".format(key, value[1]))
                 self.is_dell_g15 = True
@@ -126,7 +126,7 @@ class Command():
             cmd_current = self.acpi_cmd.format(args[0], args[1], arg1, arg2)
         else:
             cmd_current=""
-        print(cmd_current)
+        #print(cmd_current)
         # acpi_call goes nuts if you read and write the file without closing
         with open("/proc/acpi/call", "wb") as vfile:
             vfile.write(cmd_current.encode(encoding="ascii"))
@@ -137,49 +137,73 @@ class Command():
 
     def split_rgb(self, rgb):
         r = rgb & 0xff0000 >> 16
-        g = rgb & 0x00ff00 >> 08
-        b = rgb & 0x0000ff >> 00
+        g = rgb & 0x00ff00 >>  8
+        b = rgb & 0x0000ff >>  0
         return (r, g, b)
 
     # Apply given colors to keyboard.
     def apply_static(self, rgb):
-        awelc.set_static(*split_rgb(rgb))
+        awelc.set_static(*self.split_rgb(rgb))
 
     def apply_morph(self, rgb_morph, duration):
-        awelc.set_morph(*split_rgb(rgb_morph), duration)
+        awelc.set_morph(*self.split_rgb(rgb_morph), duration)
     
     def apply_color_and_morph(self, rgb, rgb_morph, duration):
-        awelc.set_color_and_morph(*split_rgb(rgb), *split_rgb(rgb_morph), duration)
+        awelc.set_color_and_morph(*self.split_rgb(rgb), *self.split_rgb(rgb_morph), duration)
     
     def remove_animation(self):
         awelc.remove_animation()
 
-    def tray_on(self):
-        awelc.set_dim(0)
+    def dim(self, dim):
+        awelc.set_dim(dim)
 
-    def tray_off(self):
-        awelc.set_dim(100)
+
+def led_subparser(arguments, cli):
+    match arguments.ledsubparser_name:
+        case 'static':
+            rgb = int(arguments.rgb, 16)
+            cli.apply_static(rgb)
+        case 'morph':
+            rgbm = int(arguments.rgbm, 16)
+            duration = int(arguments.duration)
+            cli.apply_morph(rgbm, duration)
+        case 'color_and_morph':
+            rgb = int(arguments.rgb, 16)
+            rgbm = int(arguments.rgbm, 16)
+            duration = int(arguments.duration)
+            cli.apply_color_and_morph(rgb, rgbm, duration)
+        case 'none':
+            cli.remove_animation()
 
 if __name__ == '__main__':
-    parse = argparse.ArgumentParser(prog="DellGController",
+    parser = argparse.ArgumentParser(prog="DellGController",
                                     description="An app to control keyboard backlight, power mode and fan speed on some Dell and Alienware laptops")
-    subparser = parser.add_subparsers()
+    subparser = parser.add_subparsers(dest='subparser_name', required=True)
     leds = subparser.add_parser('leds', help="Control LED color and animation")
-    ledsubparser = leds.add_subparser()
+    ledsubparser = leds.add_subparsers(dest='ledsubparser_name', required=True)
 
     static = ledsubparser.add_parser('static', help="Static color")
     morph = ledsubparser.add_parser('morph', help="Morphing color")
-    color_and_morph = ledsubparser.add_parser('color_and_morph, help="Static+Morphing color")
+    color_and_morph = ledsubparser.add_parser('color_and_morph', help="Static+Morphing color")
     led_none = ledsubparser.add_parser('none', help="Disable LEDs")
+    dim = ledsubparser.add_parser('dim', help="set LED brightness")
+    get = ledsubparser.add_parser('get', help="get LED info")
 
-    color.add_argument('rgb', help="Static RGB value in hex form")
+    static.add_argument('rgb', help="Static RGB value in hex form")
     color_and_morph.add_argument('rgb', help="Static RGB value in hex form")
     morph.add_argument('rgbm', help="Morphing RGB value in hex form")
     morph.add_argument('duration', help="Morph duration in milliseconds")
     color_and_morph.add_argument('rgbm', help="Morphing RGB value in hex form")
     color_and_morph.add_argument('duration', help="Morph duration in milliseconds")
+    dim.add_argument('dim', help="dim 0-100, 100 is off")
 
-    
+    arguments = parser.parse_args()
 
     cli = Command()
-    cli.combobox_power("USTT_Cool")
+
+    match arguments.subparser_name:
+        case 'leds':
+            led_subparser(arguments, cli)
+
+#    while True:
+#        pass
